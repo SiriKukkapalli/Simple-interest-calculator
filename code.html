@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Simple Interest Calculator</title>
+  <style>
+    :root{
+      --bg:#f7fafc;
+      --card:#ffffff;
+      --accent:#2563eb;
+      --muted:#6b7280;
+      --success:#059669;
+      --danger:#dc2626;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    body{
+      margin:0;
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      background:linear-gradient(180deg,#eef2ff 0%,var(--bg) 100%);
+      padding:2rem;
+      color:#0f172a;
+    }
+    .card{
+      width:100%;
+      max-width:720px;
+      background:var(--card);
+      border-radius:12px;
+      box-shadow: 0 10px 30px rgba(15,23,42,0.08);
+      padding:1.5rem;
+      box-sizing:border-box;
+    }
+    h1{margin:0 0 0.25rem 0; font-size:1.25rem;}
+    p.lead{margin:0 0 1rem 0; color:var(--muted); font-size:0.95rem;}
+    form{
+      display:grid;
+      gap:0.75rem;
+      grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+      align-items:end;
+    }
+    label{display:block; font-size:0.85rem; margin-bottom:0.25rem; color:#111827;}
+    input[type="number"]{
+      width:100%;
+      padding:0.6rem 0.75rem;
+      border-radius:8px;
+      border:1px solid #e6e9ee;
+      font-size:1rem;
+      box-sizing:border-box;
+      background:#fff;
+    }
+    .controls{
+      display:flex;
+      gap:0.5rem;
+      align-items:center;
+      grid-column:1/-1;
+      margin-top:0.25rem;
+    }
+    button{
+      padding:0.6rem 0.9rem;
+      border-radius:8px;
+      border:0;
+      font-weight:600;
+      cursor:pointer;
+      font-size:0.95rem;
+    }
+    button.calc{background:var(--accent); color:white; box-shadow: 0 6px 18px rgba(37,99,235,0.15);}
+    button.reset{background:transparent; border:1px solid #e6e9ee; color:#111827;}
+    .result{
+      margin-top:1rem;
+      padding:0.9rem;
+      border-radius:8px;
+      background:#f8fafc;
+      border:1px solid #eef2ff;
+      grid-column:1/-1;
+    }
+    .result .value{font-size:1.15rem; font-weight:700; color:var(--success);}
+    .muted{color:var(--muted); font-size:0.9rem;}
+    .error{color:var(--danger); font-weight:600; margin-top:0.25rem;}
+    footer{margin-top:1rem; font-size:0.85rem; color:var(--muted); text-align:right;}
+    @media (max-width:420px){
+      h1{font-size:1.1rem;}
+      .controls{flex-direction:column; align-items:stretch;}
+      button{width:100%;}
+    }
+  </style>
+</head>
+<body>
+  <main class="card" role="main" aria-labelledby="title">
+    <h1 id="title">Simple Interest Calculator</h1>
+    <p class="lead">Enter principal, annual rate (%) and time (years). The calculator shows the Simple Interest and total amount.</p>
+
+    <form id="siForm" novalidate>
+      <div>
+        <label for="principal">Principal (P)</label>
+        <input id="principal" name="principal" type="number" step="any" min="0" inputmode="decimal" placeholder="e.g. 1000" required aria-required="true" />
+      </div>
+
+      <div>
+        <label for="rate">Rate of interest (R) % per annum</label>
+        <input id="rate" name="rate" type="number" step="any" min="0" inputmode="decimal" placeholder="e.g. 5" required aria-required="true" />
+      </div>
+
+      <div>
+        <label for="time">Time (T) in years</label>
+        <input id="time" name="time" type="number" step="any" min="0" inputmode="decimal" placeholder="e.g. 2" required aria-required="true" />
+      </div>
+
+      <div class="controls" aria-hidden="false">
+        <button type="submit" class="calc" id="calculateBtn">Calculate</button>
+        <button type="button" class="reset" id="resetBtn">Reset</button>
+        <div id="err" class="error" role="alert" aria-live="polite" style="display:none;"></div>
+      </div>
+
+      <div class="result" id="result" aria-live="polite" style="display:none;">
+        <div class="muted">Simple Interest (SI):</div>
+        <div class="value" id="siValue">—</div>
+        <div style="height:0.5rem"></div>
+        <div class="muted">Total Amount (Principal + SI):</div>
+        <div class="value" id="totalValue">—</div>
+        <div style="height:0.5rem"></div>
+        <div class="muted" id="breakdown">Breakdown: —</div>
+      </div>
+    </form>
+
+    <footer>Formula: SI = (P × R × T) / 100</footer>
+  </main>
+
+  <script>
+    (function () {
+      const form = document.getElementById('siForm');
+      const principalEl = document.getElementById('principal');
+      const rateEl = document.getElementById('rate');
+      const timeEl = document.getElementById('time');
+      const resultBox = document.getElementById('result');
+      const siValue = document.getElementById('siValue');
+      const totalValue = document.getElementById('totalValue');
+      const breakdown = document.getElementById('breakdown');
+      const err = document.getElementById('err');
+      const resetBtn = document.getElementById('resetBtn');
+
+      // Helper: format number to fixed 2 decimals, but avoid -0.00
+      function fmt(n){
+        const rounded = Number.parseFloat(n).toFixed(2);
+        if (Number(rounded) === 0) return "0.00";
+        return rounded;
+      }
+
+      function showError(message){
+        err.style.display = 'block';
+        err.textContent = message;
+      }
+
+      function clearError(){
+        err.style.display = 'none';
+        err.textContent = '';
+      }
+
+      function calculateSI(p, r, t){
+        // Use decimal arithmetic via Number — for this simple calculator it's sufficient.
+        // SI = (P × R × T) / 100
+        return (p * r * t) / 100;
+      }
+
+      form.addEventListener('submit', function(e){
+        e.preventDefault();
+        clearError();
+
+        // Read values as numbers (trim to guard against stray whitespace)
+        const pRaw = principalEl.value;
+        const rRaw = rateEl.value;
+        const tRaw = timeEl.value;
+
+        // Validate presence
+        if (pRaw === '' || rRaw === '' || tRaw === '') {
+          showError('Please fill in all fields.');
+          resultBox.style.display = 'none';
+          return;
+        }
+
+        const p = Number(pRaw);
+        const r = Number(rRaw);
+        const t = Number(tRaw);
+
+        // Validate numeric and non-negative
+        if (!isFinite(p) || !isFinite(r) || !isFinite(t)) {
+          showError('Please enter valid numeric values.');
+          resultBox.style.display = 'none';
+          return;
+        }
+        if (p < 0 || r < 0 || t < 0) {
+          showError('Values cannot be negative.');
+          resultBox.style.display = 'none';
+          return;
+        }
+
+        // Perform calculation
+        const si = calculateSI(p, r, t);
+        const total = p + si;
+
+        // Display
+        siValue.textContent = fmt(si);
+        totalValue.textContent = fmt(total);
+        breakdown.textContent = `SI = (${fmt(p)} × ${fmt(r)}% × ${fmt(t)}) / 100 → ${fmt(si)}`;
+        resultBox.style.display = 'block';
+      });
+
+      resetBtn.addEventListener('click', function(){
+        form.reset();
+        clearError();
+        resultBox.style.display = 'none';
+      });
+
+      // Keyboard accessibility: Enter triggers calculate (already default) and Esc resets
+      document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape') {
+          form.reset();
+          clearError();
+          resultBox.style.display = 'none';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
